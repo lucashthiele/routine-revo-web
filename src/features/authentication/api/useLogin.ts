@@ -1,11 +1,13 @@
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import api from "../../../api/axios";
 import { useAuth } from "../../../providers/AuthProvider";
 import type { AuthResponse, LoginCredentials } from "../types";
 import { AxiosError } from "axios";
 
 interface ApiError {
-  message: string;
+  error?: string;
+  message?: string;
 }
 
 async function loginUser(credentials: LoginCredentials): Promise<AuthResponse> {
@@ -30,7 +32,19 @@ export default function useLogin() {
       login(auth, data.user);
     },
     onError: (err) => {
-      console.error("Login failed:", err.response?.data?.message);
+      const statusCode = err.response?.status;
+
+      // For 4xx errors, show the specific error message from the API
+      if (statusCode && statusCode >= 400 && statusCode < 500) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.response?.data?.message ||
+          "Ocorreu um erro inesperado";
+        toast.error(errorMessage);
+      } else {
+        // For 5xx errors or network errors, show generic message
+        toast.error("Ocorreu um erro inesperado");
+      }
     },
   });
 }

@@ -3,9 +3,12 @@ import useLogin from "../api/useLogin";
 import { type LoginCredentials, loginSchema } from "../types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "react-router-dom";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Label } from "../../../components/ui/label";
 
 export default function LoginForm() {
-  const { mutate: login, isPending, error } = useLogin();
+  const { mutate: login, isPending } = useLogin();
 
   const {
     register,
@@ -15,108 +18,86 @@ export default function LoginForm() {
     resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = (data: LoginCredentials) => {
+  const onSubmit = (data: LoginCredentials, e?: React.BaseSyntheticEvent) => {
+    e?.preventDefault();
     login(data);
   };
 
-  const apiErrorMessage =
-    error?.response?.data.message || error?.message || null;
+  // TODO - Contact Administrator
+  const handleContactAdmin = () => {
+    alert("Entre em contato com o administrador");
+  };
 
-  // TODO: change to defined design
   return (
-    <div className="w-full max-w-md space-y-8">
-      <div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          Acessar sua conta
-        </h2>
-      </div>
-      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-        {/* API Error Display */}
-        {apiErrorMessage && (
-          <div
-            className="rounded-md border border-red-300 bg-red-50 p-4"
-            role="alert"
-          >
-            <p className="text-sm font-medium text-red-700">
-              {apiErrorMessage}
-            </p>
-          </div>
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="email" className="text-[#333333]">
+          Endereço de E-mail
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="your@email.com"
+          {...register("email")}
+          className="border-[#333333]/20 focus:border-[#FA1768] focus:ring-[#FA1768]"
+          aria-invalid={errors.email ? "true" : "false"}
+        />
+        {errors.email && (
+          <p className="text-sm text-red-600">{errors.email.message}</p>
         )}
+      </div>
 
-        {/* Email Field */}
-        <div>
-          <label
-            htmlFor="email"
-            className="block text-sm font-medium text-gray-700"
-          >
-            E-mail
-          </label>
-          <div className="mt-1">
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              {...register("email")}
-              className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm ${
-                errors.email ? "border-red-500" : ""
-              }`}
-            />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.email.message}
-              </p>
-            )}
-          </div>
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="password" className="text-[#333333]">
+          Senha
+        </Label>
+        <Input
+          id="password"
+          type="password"
+          placeholder="••••••••"
+          {...register("password")}
+          className="border-[#333333]/20 focus:border-[#FA1768] focus:ring-[#FA1768]"
+          aria-invalid={errors.password ? "true" : "false"}
+        />
+        {errors.password && (
+          <p className="text-sm text-red-600">{errors.password.message}</p>
+        )}
+      </div>
 
-        {/* Password Field */}
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Senha
-          </label>
-          <div className="mt-1">
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              {...register("password")}
-              className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm ${
-                errors.password ? "border-red-500" : ""
-              }`}
-            />
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.password.message}
-              </p>
-            )}
-          </div>
-        </div>
+      <div className="flex items-center justify-between text-sm">
+        <label className="flex items-center gap-2 text-[#333333]/70 cursor-pointer">
+          <input
+            type="checkbox"
+            className="rounded border-[#333333]/20 text-[#FA1768] focus:ring-[#FA1768]"
+          />
+          Lembrar-me
+        </label>
+        <Link
+          to="/forgot-password"
+          className="text-[#FA1768] hover:text-[#FA1768]/90 transition-colors"
+        >
+          Esqueceu a senha?
+        </Link>
+      </div>
 
-        <div className="flex items-center justify-end">
-          <div className="text-sm">
-            <Link
-              to="/forgot-password"
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              Esqueceu sua senha?
-            </Link>
-          </div>
-        </div>
+      <Button
+        type="submit"
+        disabled={isPending}
+        className="w-full bg-[#FA1768] hover:bg-[#FA1768]/90 text-white"
+      >
+        {isPending ? "Entrando..." : "Entrar"}
+      </Button>
 
-        {/* Submit Button */}
-        <div>
-          <button
-            type="submit"
-            disabled={isPending}
-            className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isPending ? "Entrando..." : "Entrar"}
-          </button>
-        </div>
-      </form>
-    </div>
+      <div className="text-center text-sm text-[#333333]/70">
+        Precisa de acesso?{" "}
+        <button
+          type="button"
+          onClick={handleContactAdmin}
+          className="text-[#FA1768] hover:text-[#FA1768]"
+        >
+          Contatar Administrador
+        </button>
+      </div>
+    </form>
   );
 }

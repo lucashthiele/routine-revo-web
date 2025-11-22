@@ -1,20 +1,25 @@
 import LoginForm from "../features/authentication/components/LoginForm";
+import Logo from "../components/Logo";
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-gray-50 py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        {/* You can add your logo here */}
-        {/* <img className="mx-auto h-12 w-auto" src={logo} alt="Routine Revo" /> */}
-        <h1 className="text-center text-4xl font-bold text-blue-600">
-          Routine Revo
-        </h1>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="w-full max-w-md p-8">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 mx-auto mb-4">
+            <Logo />
+          </div>
+          <h1 className="text-[#333333] mb-2">Routine Revo</h1>
+          <p className="text-[#333333]/70">Portal do Administrador & Treinador</p>
+        </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="rounded-lg bg-white py-8 px-4 shadow sm:px-10">
+        <div className="bg-white border border-[#333333]/10 rounded-lg p-8 shadow-sm">
           <LoginForm />
         </div>
+
+        <p className="text-center text-xs text-[#333333]/50 mt-8">
+          © 2025 Routine Revo. Todos os direitos reservados.
+        </p>
       </div>
     </div>
   );

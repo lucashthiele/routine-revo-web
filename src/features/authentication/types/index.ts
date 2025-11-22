@@ -7,6 +7,12 @@ export const loginSchema = z.object({
 
 export type LoginCredentials = z.infer<typeof loginSchema>;
 
+export const forgotPasswordSchema = z.object({
+  email: z.email("E-mail inválido"),
+});
+
+export type ForgotPasswordData = z.infer<typeof forgotPasswordSchema>;
+
 export interface AuthResponse {
   authToken: string;
   refreshToken: string;

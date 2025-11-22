@@ -4,11 +4,9 @@ import PrivateRoutes from "./PrivateRoutes";
 import PublicRoutes from "./PublicRoutes";
 import LoginPage from "../pages/Login";
 import HomePage from "../pages/Home";
+import ForgotPasswordPage from "../pages/ForgotPassword";
 
 // --- Placeholders for future pages ---
-function ForgotPasswordPage() {
-  return <div className="text-gray-900">Forgot Password Page</div>;
-}
 function ActivateAccountPage() {
   return <div className="text-gray-900">Activate Account Page</div>;
 }

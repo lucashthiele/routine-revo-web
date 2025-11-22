@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, type ReactNode } from "react";
 import { AuthProvider } from "./AuthProvider";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { Toaster } from "../components/ui/sonner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,6 +23,7 @@ export default function AppProviders({ children }: AppProvidersProps) {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>{children}</AuthProvider>
         <ReactQueryDevtools initialIsOpen={false} />
+        <Toaster />
       </QueryClientProvider>
     </StrictMode>
   );

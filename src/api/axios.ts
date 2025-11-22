@@ -41,7 +41,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (err) => {
-    if (err.response?.status === 401) {
+    // Only redirect on 401 if it's not a login attempt
+    const isLoginEndpoint = err.config?.url?.includes('/auth/login');
+    
+    if (err.response?.status === 401 && !isLoginEndpoint) {
       localStorage.removeItem("auth");
       localStorage.removeItem("user");
       window.location.href = "/login";
