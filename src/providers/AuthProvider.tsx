@@ -5,8 +5,11 @@ import {
   useMemo,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
+import { isTokenValid, isTokenExpiringSoon } from "../lib/token";
+import { refreshAccessToken } from "../features/authentication/api/useRefreshToken";
 
 interface User {
   id: string;
@@ -35,9 +38,23 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef<boolean>(false);
+  
   const [auth, setAuth] = useState<AuthProps | null>(() => {
     const storedAuth = localStorage.getItem("auth");
-    return storedAuth ? JSON.parse(storedAuth) : null;
+    if (storedAuth) {
+      const parsedAuth = JSON.parse(storedAuth);
+      // Validate token on initial load
+      if (!isTokenValid(parsedAuth.token)) {
+        console.log("Token expired on load, clearing auth");
+        localStorage.removeItem("auth");
+        localStorage.removeItem("user");
+        return null;
+      }
+      return parsedAuth;
+    }
+    return null;
   });
 
   const [user, setUser] = useState<User | null>(() => {
@@ -45,7 +62,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const isAuthenticated = !!auth?.token;
+  const isAuthenticated = !!auth?.token && isTokenValid(auth.token);
+
+  // Function to refresh the access token
+  const handleTokenRefresh = useCallback(async () => {
+    if (!auth?.refreshToken || isRefreshingRef.current) {
+      return;
+    }
+
+    try {
+      isRefreshingRef.current = true;
+      console.log("Attempting to refresh access token...");
+      
+      const newTokens = await refreshAccessToken(auth.refreshToken);
+      
+      const newAuth = {
+        token: newTokens.authToken,
+        refreshToken: newTokens.refreshToken,
+      };
+      
+      setAuth(newAuth);
+      console.log("Token refreshed successfully");
+    } catch (error) {
+      console.error("Failed to refresh token:", error);
+      // If refresh fails, logout the user
+      setAuth(null);
+      setUser(null);
+      window.location.href = "/login";
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, [auth?.refreshToken]);
 
   useEffect(() => {
     console.log("Auth state changed:", { auth, user, isAuthenticated });
@@ -61,6 +108,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       localStorage.removeItem("user");
     }
   }, [auth, user, isAuthenticated]);
+
+  // Periodic token validation and refresh - check every 30 seconds
+  useEffect(() => {
+    const validateAndRefreshToken = async () => {
+      if (!auth?.token) {
+        return;
+      }
+
+      // If token is already expired, logout
+      if (!isTokenValid(auth.token)) {
+        console.log("Token expired during validation check, logging out");
+        setAuth(null);
+        setUser(null);
+        window.location.href = "/login";
+        return;
+      }
+
+      // If token is expiring soon (within 5 minutes), refresh it
+      if (isTokenExpiringSoon(auth.token, 5)) {
+        console.log("Token expiring soon, attempting refresh...");
+        await handleTokenRefresh();
+      }
+    };
+
+    // Run validation immediately
+    validateAndRefreshToken();
+
+    // Set up periodic validation (every 30 seconds)
+    intervalRef.current = setInterval(validateAndRefreshToken, 30000);
+
+    // Cleanup on unmount or when auth changes
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [auth, handleTokenRefresh]);
 
   const login = useCallback((newAuth: AuthProps, newUser?: User) => {
     console.log("Login function called with:", { newAuth, newUser });
