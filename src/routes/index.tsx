@@ -5,6 +5,7 @@ import PublicRoutes from "./PublicRoutes";
 import LoginPage from "../pages/Login";
 import HomePage from "../pages/Home";
 import ForgotPasswordPage from "../pages/ForgotPassword";
+import ClientManagementPage from "../pages/ClientManagement";
 
 // --- Placeholders for future pages ---
 function ActivateAccountPage() {
@@ -13,10 +14,6 @@ function ActivateAccountPage() {
 
 // TODO - These pages need to be migrated from POC and implemented
 // Each should use the DashboardLayout component
-function ClientManagementPage() {
-  return <div className="text-gray-900">Client Management Page - TODO</div>;
-}
-
 function RoutineBuilderPage() {
   return <div className="text-gray-900">Routine Builder Page - TODO</div>;
 }

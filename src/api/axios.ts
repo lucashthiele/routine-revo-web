@@ -3,6 +3,15 @@ import z from "zod";
 import { isTokenValid, isTokenExpiringSoon } from "../lib/token";
 import { refreshAccessToken } from "../features/authentication/api/useRefreshToken";
 
+// Extend axios config to include metadata for logging
+declare module "axios" {
+  export interface InternalAxiosRequestConfig {
+    metadata?: {
+      startTime: Date;
+    };
+  }
+}
+
 const envSchema = z.object({
   VITE_API_BASE_URL: z.url(),
 });
@@ -28,6 +37,9 @@ let isRefreshing = false;
 
 api.interceptors.request.use(
   async (config) => {
+    // Store request start time for logging
+    config.metadata = { startTime: new Date() };
+
     const storedAuth = localStorage.getItem("auth");
     const auth = storedAuth ? JSON.parse(storedAuth) : null;
 
@@ -88,16 +100,72 @@ api.interceptors.request.use(
       }
     }
 
+    // Log the request
+    console.group(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    console.log("📍 URL:", `${config.baseURL}${config.url}`);
+    console.log("🔧 Method:", config.method?.toUpperCase());
+    if (config.params && Object.keys(config.params).length > 0) {
+      console.log("🔍 Query Params:", config.params);
+    }
+    if (config.data) {
+      console.log("📦 Request Body:", config.data);
+    }
+    console.log("📋 Headers:", {
+      ...config.headers,
+      Authorization: config.headers.Authorization ? "Bearer [HIDDEN]" : undefined,
+      "X-Refresh-Token": config.headers["X-Refresh-Token"] ? "[HIDDEN]" : undefined,
+    });
+    console.groupEnd();
+
     return config;
   },
   (err) => {
+    console.error("❌ Request Error:", err);
     return Promise.reject(err);
   }
 );
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Calculate request duration
+    const duration = response.config.metadata?.startTime
+      ? new Date().getTime() - response.config.metadata.startTime.getTime()
+      : 0;
+
+    // Log the response
+    console.group(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    console.log("📍 URL:", `${response.config.baseURL}${response.config.url}`);
+    console.log("📊 Status:", response.status, response.statusText);
+    console.log("⏱️ Duration:", `${duration}ms`);
+    console.log("📦 Response Data:", response.data);
+    console.log("📋 Response Headers:", response.headers);
+    console.groupEnd();
+
+    return response;
+  },
   (err) => {
+    // Calculate request duration
+    const duration = err.config?.metadata?.startTime
+      ? new Date().getTime() - err.config.metadata.startTime.getTime()
+      : 0;
+
+    // Log the error response
+    console.group(`❌ API Error: ${err.config?.method?.toUpperCase()} ${err.config?.url}`);
+    console.log("📍 URL:", `${err.config?.baseURL}${err.config?.url}`);
+    console.log("📊 Status:", err.response?.status, err.response?.statusText);
+    console.log("⏱️ Duration:", `${duration}ms`);
+    if (err.response?.data) {
+      console.log("📦 Error Data:", err.response.data);
+    }
+    console.log("🔍 Error Message:", err.message);
+    console.log("📋 Error Config:", {
+      method: err.config?.method,
+      url: err.config?.url,
+      params: err.config?.params,
+      data: err.config?.data,
+    });
+    console.groupEnd();
+
     // Only redirect on 401 if it's not a login attempt
     const isLoginEndpoint = err.config?.url?.includes('/auth/login');
     
