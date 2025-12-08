@@ -148,3 +148,5 @@ export const deleteExercise = async (exerciseId: string): Promise<void> => {
   await api.delete(`/api/v1/exercises/${exerciseId}`);
 };
 
+
+

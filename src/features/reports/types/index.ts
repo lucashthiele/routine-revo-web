@@ -12,6 +12,8 @@ export interface WorkoutSessionResponse {
   date: string; // ISO 8601
   routineName: string;
   durationMinutes: number;
+  completed: boolean;
+  partiallyCompleted: boolean;
 }
 
 /**
@@ -49,9 +51,9 @@ export interface UserResponse {
 }
 
 /**
- * Workout session status (derived from duration)
- * - completed: durationMinutes > 0
- * - missed: durationMinutes === 0 (session scheduled but not done)
+ * Workout session status
+ * - completed: session.completed === true
+ * - missed: session.completed === false (session scheduled but not done or partially done)
  */
 export type WorkoutStatus = "completed" | "missed";
 

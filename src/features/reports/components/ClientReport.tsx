@@ -33,12 +33,12 @@ interface ClientReportProps {
 // =============================================================================
 
 /**
- * Derive workout status from duration
- * - completed: durationMinutes > 0
- * - missed: durationMinutes === 0
+ * Derive workout status from session data
+ * - completed: session.completed === true
+ * - missed: session.completed === false
  */
-function deriveWorkoutStatus(durationMinutes: number): WorkoutStatus {
-  return durationMinutes > 0 ? "completed" : "missed";
+function deriveWorkoutStatus(session: WorkoutSessionResponse): WorkoutStatus {
+  return session.completed ? "completed" : "missed";
 }
 
 function getStatusIcon(status: WorkoutStatus) {
@@ -100,8 +100,8 @@ function calculateStatistics(
   workouts: WorkoutSessionResponse[],
   adherenceRate: number
 ): WorkoutStatistics {
-  const completedWorkouts = workouts.filter((w) => w.durationMinutes > 0).length;
-  const missedWorkouts = workouts.filter((w) => w.durationMinutes === 0).length;
+  const completedWorkouts = workouts.filter((w) => w.completed).length;
+  const missedWorkouts = workouts.filter((w) => !w.completed).length;
   
   // Calculate current streak (consecutive completed workouts from most recent)
   let currentStreak = 0;
@@ -109,7 +109,7 @@ function calculateStatistics(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
   for (const workout of sortedWorkouts) {
-    if (workout.durationMinutes > 0) {
+    if (workout.completed) {
       currentStreak++;
     } else {
       break;
@@ -414,7 +414,7 @@ export function ClientReport({ clientId, clientName, onBack }: ClientReportProps
             ) : (
               <div className="divide-y divide-[#333333]/10">
                 {reportData.workoutHistory.map((session) => {
-                  const status = deriveWorkoutStatus(session.durationMinutes);
+                  const status = deriveWorkoutStatus(session);
                   return (
                     <div
                       key={session.workoutSessionId}
