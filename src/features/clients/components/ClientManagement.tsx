@@ -1,17 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { AxiosError } from "axios";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Card, CardContent } from "../../../components/ui/card";
 import { useAuth } from "../../../providers/AuthProvider";
 import { toast } from "sonner";
+
+interface ApiError {
+  error?: string;
+  message?: string;
+  status?: number;
+  path?: string;
+  timestamp?: string;
+}
 import {
   useUsers,
   useExercises,
   useCreateRoutine,
-  useAssociateRoutine,
   useRoutines,
   useBulkAssignRoutines,
+  useBulkDeleteRoutines,
+  useBulkSyncRoutines,
+  useUpdateRoutine,
+  routinesKeys,
 } from "../api/useClientsApi";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Search,
   Plus,
@@ -43,156 +56,25 @@ import {
   DialogTitle,
   DialogFooter,
 } from "../../../components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 import { Badge } from "../../../components/ui/badge";
 import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
-import { ScrollArea } from "../../../components/ui/scroll-area";
 import type { Client, Routine, Exercise } from "../types";
-import type { UserResponse, ExerciseResponse } from "../api/clientsApi";
-
-// Template routines (since there's no GET /api/v1/routines endpoint)
-// These serve as templates for creating new routines
-const routineTemplates: Routine[] = [
-  {
-    id: "template-1",
-    name: "Treino A - Upper Body",
-    description: "Foco em peito, costas, ombros e braços",
-    exercises: 8,
-    duration: "60 min",
-    level: "Intermediário",
-    exerciseList: [
-      {
-        id: "ex1",
-        name: "Supino Reto com Barra",
-        sets: "4",
-        reps: "8-10",
-        rest: "90s",
-      },
-      {
-        id: "ex2",
-        name: "Supino Inclinado com Halteres",
-        sets: "3",
-        reps: "10-12",
-        rest: "60s",
-      },
-      {
-        id: "ex3",
-        name: "Remada com Barra",
-        sets: "4",
-        reps: "8-10",
-        rest: "90s",
-      },
-      {
-        id: "ex4",
-        name: "Puxada Frontal",
-        sets: "3",
-        reps: "10-12",
-        rest: "60s",
-      },
-      {
-        id: "ex5",
-        name: "Desenvolvimento de Ombros",
-        sets: "3",
-        reps: "10-12",
-        rest: "60s",
-      },
-      {
-        id: "ex6",
-        name: "Elevação Lateral",
-        sets: "3",
-        reps: "12-15",
-        rest: "45s",
-      },
-      {
-        id: "ex7",
-        name: "Rosca Direta com Barra",
-        sets: "3",
-        reps: "10-12",
-        rest: "60s",
-      },
-      {
-        id: "ex8",
-        name: "Tríceps Pulley",
-        sets: "3",
-        reps: "12-15",
-        rest: "45s",
-      },
-    ],
-  },
-  {
-    id: "template-2",
-    name: "Treino B - Lower Body",
-    description: "Pernas completas e glúteos",
-    exercises: 10,
-    duration: "75 min",
-    level: "Intermediário",
-    exerciseList: [
-      {
-        id: "ex9",
-        name: "Agachamento com Barra",
-        sets: "4",
-        reps: "8-10",
-        rest: "120s",
-      },
-      { id: "ex10", name: "Leg Press", sets: "4", reps: "10-12", rest: "90s" },
-      {
-        id: "ex11",
-        name: "Levantamento Terra",
-        sets: "4",
-        reps: "6-8",
-        rest: "120s",
-      },
-      {
-        id: "ex12",
-        name: "Cadeira Extensora",
-        sets: "3",
-        reps: "12-15",
-        rest: "60s",
-      },
-      {
-        id: "ex13",
-        name: "Cadeira Flexora",
-        sets: "3",
-        reps: "12-15",
-        rest: "60s",
-      },
-      {
-        id: "ex14",
-        name: "Elevação Pélvica",
-        sets: "3",
-        reps: "12-15",
-        rest: "60s",
-      },
-      {
-        id: "ex15",
-        name: "Stiff com Halteres",
-        sets: "3",
-        reps: "10-12",
-        rest: "60s",
-      },
-      {
-        id: "ex16",
-        name: "Panturrilha no Leg Press",
-        sets: "4",
-        reps: "15-20",
-        rest: "45s",
-      },
-      {
-        id: "ex17",
-        name: "Abdução de Quadril",
-        sets: "3",
-        reps: "15-20",
-        rest: "45s",
-      },
-      {
-        id: "ex18",
-        name: "Adução de Quadril",
-        sets: "3",
-        reps: "15-20",
-        rest: "45s",
-      },
-    ],
-  },
-];
+import type {
+  UserResponse,
+  ExerciseResponse,
+  RoutineResponse,
+  RoutineItemResponse,
+} from "../api/clientsApi";
 
 interface ClientManagementProps {
   onNavigateToReport?: (clientId: string, clientName: string) => void;
@@ -246,6 +128,7 @@ export function ClientManagement({
   onNavigateToReport,
 }: ClientManagementProps) {
   const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [isRoutineDialogOpen, setIsRoutineDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -265,13 +148,22 @@ export function ClientManagement({
   const [routineNameError, setRoutineNameError] = useState("");
   const [routineExercisesError, setRoutineExercisesError] = useState("");
 
-  // API Hooks - Fetch all clients once, filter client-side
-  const { data: usersData, isLoading: isLoadingUsers } = useUsers({
-    role: "MEMBER",
-    status: "ACTIVE",
-    page: 0,
-    size: 100,
-  });
+  // Ref to track if we need to pre-select routines when modal opens
+  const shouldPreSelectRef = useRef(false);
+
+  // API Hooks - Fetch clients filtered by coachId (for COACH users) or all (for ADMIN users)
+  // Wait for currentUser to be loaded before making the request
+  const { data: usersData, isLoading: isLoadingUsers } = useUsers(
+    {
+      role: "MEMBER",
+      status: "ACTIVE",
+      // Only filter by coachId if the user is a COACH - ADMINs see all clients
+      coachId: currentUser?.role === "COACH" ? currentUser.id : undefined,
+      page: 0,
+      size: 100,
+    },
+    { enabled: !!currentUser }
+  );
 
   const { data: exercisesData, isLoading: isLoadingExercises } = useExercises({
     name: exerciseSearchTerm,
@@ -279,52 +171,139 @@ export function ClientManagement({
     size: 100,
   });
 
-  // Fetch routines (templates only - routines without assigned members)
-  const { data: routinesData, isLoading: isLoadingRoutines } = useRoutines({
-    creatorId: currentUser?.id,
-    templatesOnly: true,
-    page: 0,
-    size: 50,
-  });
+  // Fetch all TEMPLATE routines
+  const {
+    data: templatesData,
+    isLoading: isLoadingTemplates,
+    refetch: refetchTemplates,
+  } = useRoutines(
+    {
+      routineType: "TEMPLATE",
+      page: 0,
+      size: 100,
+    },
+    { enabled: false }
+  );
+
+  // Fetch member's routines when a client is selected
+  const {
+    data: memberRoutinesData,
+    isLoading: isLoadingMemberRoutines,
+    refetch: refetchMemberRoutines,
+  } = useRoutines(
+    {
+      memberId: selectedClient?.id,
+      page: 0,
+      size: 100,
+    },
+    { enabled: false }
+  );
+
+  // Fetch routines when modal opens - ALWAYS fetch fresh from server (no cache)
+  useEffect(() => {
+    if (isRoutineDialogOpen && selectedClient && shouldPreSelectRef.current) {
+      const fetchAndPreSelect = async () => {
+        // Clear any cached routine data to ensure fresh fetch
+        await queryClient.resetQueries({ queryKey: routinesKeys.all });
+        
+        // Fetch fresh data from server
+        refetchTemplates();
+        const result = await refetchMemberRoutines();
+        
+        // Pre-select all member routines after fresh data is loaded
+        if (result.data?.routines) {
+          const routineIds = result.data.routines.map((r) => r.id);
+          setSelectedRoutines(routineIds);
+          
+          // Populate expiration date from the first routine that has one
+          if (result.data.routines.length > 0) {
+            const routineWithExpiration = result.data.routines.find(
+              (r) => r.expirationDate
+            );
+            if (routineWithExpiration?.expirationDate) {
+              const date = new Date(routineWithExpiration.expirationDate);
+              const formattedDate = date.toISOString().split("T")[0];
+              setExpirationDate(formattedDate);
+            }
+          }
+        }
+        shouldPreSelectRef.current = false;
+      };
+      
+      fetchAndPreSelect();
+    }
+  }, [
+    isRoutineDialogOpen,
+    selectedClient,
+    refetchTemplates,
+    refetchMemberRoutines,
+    queryClient,
+  ]);
+
+  // Combined loading state
+  const isLoadingRoutines = isLoadingTemplates || isLoadingMemberRoutines;
 
   const createRoutineResult = useCreateRoutine();
   const {
     mutateAsync: createRoutineMutation,
     isPending: isCreatingRoutineMutation,
   } = createRoutineResult;
-  const associateRoutineResult = useAssociateRoutine();
-  const {
-    mutateAsync: associateRoutineMutation,
-    isPending: isAssociatingRoutine,
-  } = associateRoutineResult;
   const bulkAssignResult = useBulkAssignRoutines();
   const { mutateAsync: bulkAssignMutation, isPending: isBulkAssigning } =
     bulkAssignResult;
+  const bulkSyncResult = useBulkSyncRoutines();
+  const { mutateAsync: bulkSyncMutation, isPending: isBulkSyncing } =
+    bulkSyncResult;
+  const updateRoutineResult = useUpdateRoutine();
+  const { mutateAsync: updateRoutineMutation, isPending: isUpdatingRoutine } =
+    updateRoutineResult;
+  const bulkDeleteResult = useBulkDeleteRoutines();
+  const { mutateAsync: bulkDeleteMutation, isPending: isBulkDeleting } =
+    bulkDeleteResult;
+
+  // State for clear routines confirmation dialog
+  const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
 
   // Convert API data to local format
   const clients: Client[] = usersData?.users.map(userToClient) || [];
   const exerciseLibrary = exercisesData?.exercises || [];
 
-  // Convert API routines to local format
-  const availableRoutines: Routine[] =
-    routinesData?.routines.map((routine) => ({
-      id: routine.id,
-      name: routine.name,
-      description: routine.description || "",
-      exercises: routine.itemCount,
-      duration: "N/A", // Not provided by API
-      level: "Intermediário", // Not provided by API
-      exerciseList: routine.items.map((item) => ({
-        id: item.exerciseId,
-        name: item.exerciseName,
-        sets: item.sets.toString(),
-        reps: item.reps,
-        rest: item.restTime || "60s",
-      })),
-    })) || [];
+  // Helper to convert API routine to local format
+  const convertRoutine = (
+    routine: RoutineResponse
+  ): Routine & { isTemplate: boolean; templateId?: string } => ({
+    id: routine.id,
+    name: routine.name,
+    description: routine.description || "",
+    exercises: routine.itemCount,
+    duration: "N/A",
+    level: "Intermediário",
+    isTemplate: routine.routineType === "TEMPLATE",
+    templateId: routine.templateId,
+    exerciseList: routine.items.map((item: RoutineItemResponse) => ({
+      id: item.exerciseId,
+      name: item.exerciseName,
+      sets: item.sets.toString(),
+      reps: item.reps,
+      rest: item.restTime || "60s",
+    })),
+  });
 
-  // Combine with templates as fallback (if API returns empty or user wants templates)
-  const allRoutines: Routine[] = [...availableRoutines, ...routineTemplates];
+  // Get member's current routines
+  const memberRoutines = memberRoutinesData?.routines.map(convertRoutine) || [];
+
+  // Get templateIds that are already assigned to the member
+  const assignedTemplateIds = new Set(
+    memberRoutines.filter((r) => r.templateId).map((r) => r.templateId)
+  );
+
+  // Filter templates: exclude those already assigned to the member
+  const availableTemplates = (templatesData?.routines || [])
+    .filter((template) => !assignedTemplateIds.has(template.id))
+    .map(convertRoutine);
+
+  // Combine: member's routines + available templates (not yet assigned)
+  const allRoutines = [...memberRoutines, ...availableTemplates];
 
   // Client-side filtering - instant results, no API calls while typing
   const filteredClients = clients.filter((client) => {
@@ -338,18 +317,9 @@ export function ClientManagement({
 
   const handleAssignRoutine = (client: Client) => {
     setSelectedClient(client);
-    if (client.assignedRoutines && client.assignedRoutines.length > 0) {
-      const routineIds = client.assignedRoutines.map((r) => r.routineId);
-      setSelectedRoutines(routineIds);
-      if (client.assignedRoutines[0].expirationDate) {
-        setExpirationDate(client.assignedRoutines[0].expirationDate);
-      } else {
-        setExpirationDate("");
-      }
-    } else {
-      setSelectedRoutines([]);
-      setExpirationDate("");
-    }
+    setSelectedRoutines([]); // Will be populated by effect after fetch
+    setExpirationDate("");
+    shouldPreSelectRef.current = true; // Mark that we need to pre-select after data loads
     setIsRoutineDialogOpen(true);
   };
 
@@ -361,66 +331,123 @@ export function ClientManagement({
     );
   };
 
-  const handleAddRoutines = async () => {
-    if (selectedRoutines.length === 0 || !selectedClient) {
-      toast.error("Selecione pelo menos uma rotina");
+  const handleClearAllRoutines = async () => {
+    if (!selectedClient || memberRoutines.length === 0) {
+      toast.error("Nenhuma rotina para remover");
       return;
     }
 
     try {
-      // Separate existing routines from templates
-      const existingRoutineIds = selectedRoutines.filter((id) =>
-        availableRoutines.some((r) => r.id === id)
-      );
-      const templateIds = selectedRoutines.filter((id) =>
-        routineTemplates.some((r) => r.id === id)
+      const routineIds = memberRoutines.map((r) => r.id);
+      await bulkDeleteMutation({
+        memberId: selectedClient.id,
+        data: { routineIds },
+      });
+
+      toast.success(
+        `${routineIds.length} rotina(s) removida(s) de ${selectedClient.name}`
       );
 
-      // Use bulk assignment for existing routines
-      if (existingRoutineIds.length > 0) {
-        await bulkAssignMutation({
-          memberId: selectedClient.id,
-          data: {
-            routineIds: existingRoutineIds,
-            expirationDate: expirationDate
-              ? new Date(expirationDate).toISOString()
-              : undefined,
-          },
-        });
+      // Refresh the lists and clear selection
+      await Promise.all([refetchTemplates(), refetchMemberRoutines()]);
+      setSelectedRoutines([]);
+      setIsClearDialogOpen(false);
+    } catch (error) {
+      console.error("Error clearing routines:", error);
+      
+      const axiosError = error as AxiosError<ApiError>;
+      const statusCode = axiosError.response?.status;
+      
+      if (statusCode && statusCode >= 400 && statusCode < 500) {
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          "Erro ao remover rotinas. Tente novamente.";
+        toast.error(errorMessage);
+      } else {
+        toast.error("Erro ao remover rotinas. Tente novamente.");
+      }
+    }
+  };
+
+  const handleAddRoutines = async () => {
+    if (!selectedClient) {
+      toast.error("Nenhum cliente selecionado");
+      return;
+    }
+
+    try {
+      // Collect all template IDs from selection:
+      // - For directly selected templates: use their ID
+      // - For selected member routines that have a templateId: use that templateId
+      const templateIds: string[] = [];
+
+      for (const routineId of selectedRoutines) {
+        // Check if it's a template
+        const template = availableTemplates.find((t) => t.id === routineId);
+        if (template) {
+          templateIds.push(template.id);
+          continue;
+        }
+
+        // Check if it's a member routine with a templateId
+        const memberRoutine = memberRoutines.find((r) => r.id === routineId);
+        if (memberRoutine?.templateId) {
+          templateIds.push(memberRoutine.templateId);
+        }
       }
 
-      // Create new routines from templates
-      for (const templateId of templateIds) {
-        const template = routineTemplates.find((r) => r.id === templateId);
-        if (!template || !currentUser) continue;
-
-        // Create the routine
-        await createRoutineMutation({
-          name: template.name,
-          description: template.description,
-          creatorId: currentUser.id,
-          memberId: selectedClient.id,
+      // Use bulk sync endpoint (PUT) - it handles incremental comparison:
+      // - Adds routines that are in the list but not assigned
+      // - Removes routines that are assigned but not in the list
+      // - Leaves unchanged routines as-is
+      const result = await bulkSyncMutation({
+        memberId: selectedClient.id,
+        data: {
+          routineIds: templateIds,
           expirationDate: expirationDate
             ? new Date(expirationDate).toISOString()
             : undefined,
-          items: template.exerciseList.map((ex, idx) => ({
-            exerciseId: ex.id,
-            sets: parseInt(ex.sets),
-            reps: ex.reps,
-            restTime: ex.rest,
-            sequenceOrder: idx + 1,
-          })),
-        });
+        },
+      });
+
+      // Show result message
+      const messages: string[] = [];
+      if (result.addedCount > 0) {
+        messages.push(`${result.addedCount} adicionada(s)`);
+      }
+      if (result.removedCount > 0) {
+        messages.push(`${result.removedCount} removida(s)`);
+      }
+      if (result.unchangedCount > 0) {
+        messages.push(`${result.unchangedCount} sem alteração`);
       }
 
-      toast.success(
-        `${selectedRoutines.length} rotina(s) atribuída(s) para ${selectedClient.name}`
-      );
+      if (messages.length > 0) {
+        toast.success(
+          `Rotinas sincronizadas para ${selectedClient.name}: ${messages.join(", ")}`
+        );
+      } else {
+        toast.info("Nenhuma alteração para salvar");
+      }
+
       setIsRoutineDialogOpen(false);
       setSelectedRoutines([]);
     } catch (error) {
-      console.error("Error assigning routines:", error);
-      toast.error("Erro ao atribuir rotinas. Tente novamente.");
+      console.error("Error syncing routines:", error);
+      
+      const axiosError = error as AxiosError<ApiError>;
+      const statusCode = axiosError.response?.status;
+      
+      if (statusCode && statusCode >= 400 && statusCode < 500) {
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          "Erro ao sincronizar rotinas. Tente novamente.";
+        toast.error(errorMessage);
+      } else {
+        toast.error("Erro ao sincronizar rotinas. Tente novamente.");
+      }
     }
   };
 
@@ -472,11 +499,15 @@ export function ClientManagement({
     }
 
     try {
-      const result = await createRoutineMutation({
+      // Create the routine - memberId is already set so it will be associated with the member
+      await createRoutineMutation({
         name: newRoutineName,
         description: newRoutineDescription,
         creatorId: currentUser.id,
-        memberId: selectedClient?.id,
+        // Only set memberId if NOT creating as a standard template
+        memberId: isStandardRoutine ? undefined : selectedClient?.id,
+        // If isStandardRoutine is checked, create as TEMPLATE, otherwise CUSTOM for member
+        routineType: isStandardRoutine ? "TEMPLATE" : "CUSTOM",
         expirationDate: expirationDate
           ? new Date(expirationDate).toISOString()
           : undefined,
@@ -489,22 +520,30 @@ export function ClientManagement({
         })),
       });
 
-      // If creating for a specific client, associate it
-      if (selectedClient) {
-        await associateRoutineMutation({
-          routineId: result.id,
-          memberId: selectedClient.id,
-        });
-      }
-
-      const routineType = isStandardRoutine
+      const routineTypeLabel = isStandardRoutine
         ? "Rotina Padrão"
         : "Rotina Personalizada";
-      toast.success(`${routineType} "${newRoutineName}" criada com sucesso!`);
+      toast.success(`${routineTypeLabel} "${newRoutineName}" criada com sucesso!`);
+      
+      // Refresh routine lists to show the newly created routine
+      await Promise.all([refetchTemplates(), refetchMemberRoutines()]);
+      
       handleCancelCreateRoutine();
     } catch (error) {
       console.error("Error creating routine:", error);
-      toast.error("Erro ao criar rotina. Tente novamente.");
+      
+      const axiosError = error as AxiosError<ApiError>;
+      const statusCode = axiosError.response?.status;
+      
+      if (statusCode && statusCode >= 400 && statusCode < 500) {
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          "Erro ao criar rotina. Tente novamente.";
+        toast.error(errorMessage);
+      } else {
+        toast.error("Erro ao criar rotina. Tente novamente.");
+      }
     }
   };
 
@@ -801,13 +840,13 @@ export function ClientManagement({
           {isCreatingRoutine ? (
             // New Routine Form with Exercise Builder
             <div
-              className="flex gap-6 overflow-hidden"
+              className="flex gap-6"
               style={{ height: "calc(85vh - 220px)" }}
             >
               {/* Left Column - Routine Info & Exercises */}
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <ScrollArea className="h-full pr-4">
-                  <div className="space-y-4">
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#333333]/20 scrollbar-track-transparent">
+                  <div className="space-y-4 pr-4 pb-4">
                     <div>
                       <Label htmlFor="routine-name" className="text-[#333333]">
                         Nome da Rotina
@@ -1015,11 +1054,11 @@ export function ClientManagement({
                       )}
                     </div>
                   </div>
-                </ScrollArea>
+                </div>
               </div>
 
               {/* Right Column - Exercise Library */}
-              <div className="w-96 border-l border-[#333333]/10 pl-6 flex flex-col overflow-hidden">
+              <div className="w-96 border-l border-[#333333]/10 pl-6 flex flex-col min-h-0">
                 <div className="mb-4 shrink-0">
                   <Label className="text-[#333333] mb-2 block">
                     Biblioteca de Exercícios
@@ -1035,13 +1074,13 @@ export function ClientManagement({
                   </div>
                 </div>
 
-                <ScrollArea className="flex-1">
+                <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#333333]/20 scrollbar-track-transparent">
                   {isLoadingExercises ? (
                     <div className="flex items-center justify-center p-8">
                       <Loader2 className="w-6 h-6 animate-spin text-[#FA1768]" />
                     </div>
                   ) : (
-                    <div className="space-y-2 pr-4">
+                    <div className="space-y-2 pr-2">
                       {filteredExerciseLibrary.map((exercise) => {
                         const isAdded = newRoutineExercises.some(
                           (ex) => ex.id === exercise.id
@@ -1080,17 +1119,17 @@ export function ClientManagement({
                       })}
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </div>
             </div>
           ) : (
             // Routine Selection View (Templates)
             <div
-              className="flex gap-6 overflow-hidden"
+              className="flex gap-6"
               style={{ height: "calc(85vh - 220px)" }}
             >
               {/* Left Sidebar - Routine Templates */}
-              <div className="w-96 border-r border-[#333333]/10 pr-6 flex flex-col overflow-hidden">
+              <div className="w-96 border-r border-[#333333]/10 pr-6 flex flex-col min-h-0">
                 <div className="mb-4 shrink-0">
                   <div className="mb-3">
                     <Label
@@ -1111,12 +1150,12 @@ export function ClientManagement({
                     Rotinas Disponíveis (Templates)
                   </h3>
                   <p className="text-xs text-[#333333]/70">
-                    {selectedRoutines.length} de {routineTemplates.length}{" "}
+                    {selectedRoutines.length} de {allRoutines.length}{" "}
                     selecionada(s)
                   </p>
                 </div>
-                <ScrollArea className="flex-1">
-                  <div className="space-y-2 pr-4">
+                <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#333333]/20 scrollbar-track-transparent">
+                  <div className="space-y-2 pr-2">
                     {isLoadingRoutines ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -1186,11 +1225,11 @@ export function ClientManagement({
                       })
                     )}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
 
               {/* Right Content - Exercise List */}
-              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="flex-1 flex flex-col min-h-0">
                 {selectedRoutines.length === 0 ? (
                   <div className="h-full flex items-center justify-center">
                     <div className="text-center text-[#333333]/50">
@@ -1211,7 +1250,7 @@ export function ClientManagement({
                       </h3>
                       <p className="text-sm text-[#333333]/70 mt-1">
                         {selectedRoutines.reduce((total, routineId) => {
-                          const routine = routineTemplates.find(
+                          const routine = allRoutines.find(
                             (r) => r.id === routineId
                           );
                           return total + (routine?.exerciseList.length || 0);
@@ -1219,10 +1258,10 @@ export function ClientManagement({
                         exercícios no total
                       </p>
                     </div>
-                    <ScrollArea className="flex-1 min-h-0">
-                      <div className="space-y-8 pr-4">
+                    <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#333333]/20 scrollbar-track-transparent">
+                      <div className="space-y-8 pr-2 pb-4">
                         {selectedRoutines.map((routineId) => {
-                          const routine = routineTemplates.find(
+                          const routine = allRoutines.find(
                             (r) => r.id === routineId
                           );
                           if (!routine) return null;
@@ -1307,7 +1346,7 @@ export function ClientManagement({
                           );
                         })}
                       </div>
-                    </ScrollArea>
+                    </div>
                   </>
                 )}
               </div>
@@ -1353,11 +1392,23 @@ export function ClientManagement({
               </>
             ) : (
               <>
+                {/* Clear all routines button - only show if member has routines */}
+                {memberRoutines.length > 0 && (
+                  <Button
+                    onClick={() => setIsClearDialogOpen(true)}
+                    variant="outline"
+                    className="mr-auto border-[#FA1768]/30 text-[#FA1768] hover:bg-[#FA1768]/10"
+                    disabled={isBulkDeleting || isBulkAssigning || isBulkSyncing || isUpdatingRoutine}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Limpar Rotinas ({memberRoutines.length})
+                  </Button>
+                )}
                 <Button
                   onClick={handleCreateNewRoutine}
                   variant="outline"
                   className="border-[#333333]/20 text-[#333333] hover:bg-[#333333]/5"
-                  disabled={isAssociatingRoutine}
+                  disabled={isBulkAssigning || isBulkSyncing || isUpdatingRoutine || isBulkDeleting}
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Nova Rotina
@@ -1365,28 +1416,36 @@ export function ClientManagement({
                 <Button
                   onClick={handleAddRoutines}
                   disabled={
-                    selectedRoutines.length === 0 ||
-                    isAssociatingRoutine ||
                     isBulkAssigning ||
-                    isCreatingRoutineMutation
+                    isBulkSyncing ||
+                    isCreatingRoutineMutation ||
+                    isUpdatingRoutine ||
+                    isBulkDeleting
                   }
                   className="bg-[#FA1768] hover:bg-[#FA1768]/90 text-white disabled:opacity-50"
                 >
-                  {(isAssociatingRoutine ||
-                    isBulkAssigning ||
-                    isCreatingRoutineMutation) && (
+                  {(isBulkAssigning ||
+                    isBulkSyncing ||
+                    isCreatingRoutineMutation ||
+                    isUpdatingRoutine ||
+                    isBulkDeleting) && (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   )}
-                  {isAssociatingRoutine ||
-                  isBulkAssigning ||
-                  isCreatingRoutineMutation
-                    ? "Atribuindo..."
+                  {isBulkAssigning ||
+                  isBulkSyncing ||
+                  isCreatingRoutineMutation ||
+                  isUpdatingRoutine ||
+                  isBulkDeleting
+                    ? "Sincronizando..."
                     : selectedClient?.assignedRoutines &&
                       selectedClient.assignedRoutines.length > 0
-                    ? "Salvar Alterações"
+                    ? "Sincronizar Rotinas"
                     : "Adicionar"}{" "}
                   {selectedRoutines.length > 0 &&
-                    !isAssociatingRoutine &&
+                    !isBulkAssigning &&
+                    !isBulkSyncing &&
+                    !isUpdatingRoutine &&
+                    !isBulkDeleting &&
                     `(${selectedRoutines.length})`}
                 </Button>
               </>
@@ -1394,6 +1453,43 @@ export function ClientManagement({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Clear All Routines Confirmation Dialog */}
+      <AlertDialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#333333]">
+              Limpar Todas as Rotinas
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[#333333]/70">
+              Tem certeza que deseja remover todas as {memberRoutines.length} rotina(s) 
+              de <strong>{selectedClient?.name}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              className="border-[#333333]/20 text-[#333333]"
+              disabled={isBulkDeleting}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearAllRoutines}
+              disabled={isBulkDeleting}
+              className="bg-[#FA1768] hover:bg-[#FA1768]/90 text-white"
+            >
+              {isBulkDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Removendo...
+                </>
+              ) : (
+                "Remover Todas"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

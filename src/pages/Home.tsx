@@ -1,7 +1,9 @@
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useAuth } from "../providers/AuthProvider";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export default function HomePage() {
+  useDocumentTitle("Dashboard");
   const { user } = useAuth();
 
   return (

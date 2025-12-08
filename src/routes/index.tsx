@@ -1,31 +1,15 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "../App";
 import PrivateRoutes from "./PrivateRoutes";
 import PublicRoutes from "./PublicRoutes";
 import LoginPage from "../pages/Login";
-import HomePage from "../pages/Home";
 import ForgotPasswordPage from "../pages/ForgotPassword";
+import OnboardingPage from "../pages/Onboarding";
 import ClientManagementPage from "../pages/ClientManagement";
-
-// --- Placeholders for future pages ---
-function ActivateAccountPage() {
-  return <div className="text-gray-900">Activate Account Page</div>;
-}
-
-// TODO - These pages need to be migrated from POC and implemented
-// Each should use the DashboardLayout component
-function RoutineBuilderPage() {
-  return <div className="text-gray-900">Routine Builder Page - TODO</div>;
-}
-
-function ExerciseLibraryPage() {
-  return <div className="text-gray-900">Exercise Library Page - TODO</div>;
-}
-
-function UserManagementPage() {
-  return <div className="text-gray-900">User Management Page - TODO</div>;
-}
-// ------------------------------------
+import ClientReportPage from "../pages/ClientReport";
+import RoutineBuilderPage from "../pages/RoutineBuilder";
+import ExerciseLibraryPage from "../pages/ExerciseLibrary";
+import UserManagementPage from "../pages/UserManagement";
 
 export const router = createBrowserRouter([
   {
@@ -37,11 +21,15 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <HomePage />,
+            element: <Navigate to="/clients" replace />,
           },
           {
             path: "/clients",
             element: <ClientManagementPage />,
+          },
+          {
+            path: "/clients/:clientId/report",
+            element: <ClientReportPage />,
           },
           {
             path: "/routines",
@@ -68,11 +56,12 @@ export const router = createBrowserRouter([
             path: "/forgot-password",
             element: <ForgotPasswordPage />,
           },
-          {
-            path: "/activate-account/:token",
-            element: <ActivateAccountPage />,
-          },
         ],
+      },
+      // Onboarding route - outside PublicRoutes to work regardless of auth state
+      {
+        path: "/onboarding",
+        element: <OnboardingPage />,
       },
     ],
   },

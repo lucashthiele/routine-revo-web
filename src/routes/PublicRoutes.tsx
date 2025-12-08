@@ -5,7 +5,7 @@ export default function PublicRoutes() {
   const { isAuthenticated } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/clients" replace />;
   }
 
   return <Outlet />;

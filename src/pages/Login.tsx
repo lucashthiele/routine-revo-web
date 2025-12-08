@@ -1,7 +1,9 @@
 import LoginForm from "../features/authentication/components/LoginForm";
 import Logo from "../components/Logo";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export default function LoginPage() {
+  useDocumentTitle("Login");
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="w-full max-w-md p-8">
